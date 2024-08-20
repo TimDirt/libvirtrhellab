@@ -1,0 +1,52 @@
+#cloud-config
+users:
+  - name: "student"
+    gecos: "student"
+    groups: "users,wheel"
+    sudo: 
+      - "ALL=(ALL) NOPASSWD:ALL"
+
+ssh_pwauth: True
+chpasswd:
+  list: |
+    root:student
+    student:student
+  expire: False
+
+rh_subscription:
+  username: 
+  password:
+  auto-attach: True
+
+
+mounts:
+  - [ workingdir, /home/student, virtiofs ]
+
+
+write_files:
+  - path: /tmp/scripts/test-script.sh
+    content: |
+      #!/bin/bash
+      set -e
+      checkmodule -M -m -o /tmp/scripts/my-sshd.mod /tmp/scripts/my-sshd.te
+      semodule_package -o /tmp/scripts/my-sshd.pp -m /tmp/scripts/my-sshd.mod
+      semodule -X 300 -i /tmp/scripts/my-sshd.pp
+      echo 'Script executed successfully!' >> /tmp/testing.txt      
+    permissions: '0755'
+  - path: /tmp/scripts/my-sshd.te
+    content: |
+      module my-sshd 1.0;
+
+      require {
+              type sshd_t;
+              type virtiofs_t;
+              class file { open read getattr };
+      }
+
+      #============= sshd_t ==============
+      allow sshd_t virtiofs_t:file { open read getattr };
+    permissions: '0644'
+
+
+runcmd:
+  - [ sh, "/tmp/scripts/test-script.sh" ]
